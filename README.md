@@ -136,12 +136,55 @@ bar. Any number printed here is a plumbing check, not a result.
 `pytest` covers the one piece of real logic: that a feature vector has the
 right shape and that the 20 letter-frequencies actually sum to 1.
 
+## Pre-registered analysis decisions
+
+Fixed **before** any accuracy number was computed, so they cannot be chosen to
+flatter a result:
+
+- All 9 compartments are kept, including Peroxisome with only 88 proteins.
+- **Primary metric: macro-F1**, which averages the score per class so the 88
+  Peroxisome proteins count as much as the 2,345 Cytoplasm ones. Accuracy is
+  reported alongside but is secondary — with a 26.5% majority class, accuracy
+  rewards a model that ignores rare compartments.
+- Class support is printed next to every metric.
+
+## Results so far: the leakage measurement
+
+The dataset is 8,837 manually-curated proteins from human, mouse and rat, each
+with a subcellular location backed by an actual experiment. It was split two
+ways, then MMseqs2 was used to ask a simple question of each: *how many test
+proteins have a relative in the training set?*
+
+| Split | Test proteins with a ≥30%-identity relative in train |
+|---|---|
+| Random (the tutorial way) | **1,283 / 2,651 = 48.4%** |
+| Clustered by family | **95 / 2,657 = 3.6%** |
+
+Nearly half of the test set in a standard random split has a close relative the
+model saw during training. That is the leakage this project set out to measure,
+and it is large.
+
+Both splits hold almost identical class proportions — Cytoplasm 698 vs 704 test
+proteins, Nucleus 598 vs 598, and so on down the table. That matters: any
+performance difference between the two can be attributed to homology rather
+than to one split happening to be better balanced than the other.
+
+**Why 3.6% and not zero?** MMseqs2 clusters greedily — a sequence joins a family
+by being similar to that family's single representative. Two proteins in
+different families can still resemble each other without either resembling the
+other's representative. So a residual trickle survives, and the honest thing is
+to report it rather than claim a perfectly clean split. 3.6% against 48.4% is a
+13-fold reduction, not an elimination.
+
+The clustering itself: 8,837 proteins collapse into 5,369 families, of which
+3,548 are singletons. The largest family holds 31 proteins.
+
 ## Roadmap
 
 | Milestone | What happens |
 |---|---|
 | 0 | Toy pipeline end to end — **done** |
-| 1 | Real dataset; group sequences into families with MMseqs2; measure how much leakage the random split was hiding |
+| 1 | Real dataset; families via MMseqs2; leakage measured — **done** |
 | 2 | ESM-2 embeddings, smallest checkpoint, runs on a laptop CPU, cached to disk |
 | 3 | Cheap features vs. embeddings, under both splits, with a per-class breakdown |
 | 4 | Write-up |
