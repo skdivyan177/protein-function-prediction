@@ -179,15 +179,91 @@ to report it rather than claim a perfectly clean split. 3.6% against 48.4% is a
 The clustering itself: 8,837 proteins collapse into 5,369 families, of which
 3,548 are singletons. The largest family holds 31 proteins.
 
+## The result
+
+Two feature sets, two splits, identical model and seed throughout — only the
+features and the split change.
+
+| Features | Split | Accuracy | Macro-F1 |
+|---|---|---:|---:|
+| Composition (21-d) | random | 0.386 | 0.310 |
+| Composition (21-d) | clustered | 0.388 | **0.312** |
+| ESM-2 35M (480-d) | random | 0.706 | 0.624 |
+| ESM-2 35M (480-d) | clustered | 0.623 | **0.484** |
+| always guess the largest class | clustered | 0.263 | — |
+
+### What each method loses when the split stops leaking
+
+| Features | macro-F1 random → clustered | Change |
+|---|---|---:|
+| Composition | 0.310 → 0.312 | **+0.4%** |
+| ESM-2 | 0.624 → 0.484 | **−22.5%** |
+
+Letter-counting does not care which split it is given. ESM-2 loses almost a
+quarter of its score.
+
+That asymmetry was predicted before the experiment ran, and the reasoning was
+simple: composition is a bag of residues. It discards all ordering, so there is
+no mechanism by which it *could* memorise a specific homolog — it can only pick
+up coarse chemistry like "membrane proteins are greasy," which is equally true
+of protein families it has never seen. ESM-2 has the capacity to recognise
+specific families, and a random split rewards it for doing so.
+
+### The headline number
+
+ESM-2's advantage over letter-counting, measured in macro-F1:
+
+| Split | ESM-2 advantage |
+|---|---:|
+| Random | +0.314 |
+| Clustered | +0.172 |
+
+**About 45% of ESM-2's apparent advantage is an artifact of homology leakage.
+The other 55% is real.**
+
+That second sentence matters as much as the first. ESM-2 still wins decisively
+under the honest split — 0.484 against 0.312, well clear of the 0.263 you get
+by always guessing the largest class. This is not a debunking. It is a
+correction to the size of a real effect, and the correction is large enough
+that a paper reporting only the random-split number would overstate its case by
+close to a factor of two.
+
+### Per-class, on the clustered split
+
+ESM-2's gains are not uniform. It is far ahead on Secreted (0.717 vs 0.378
+F1), Mitochondrion (0.654 vs 0.335) and Nucleus (0.726 vs 0.541) — compartments
+whose proteins carry specific positional signals, short address-tag motifs near
+the start or end of the chain, which a bag-of-residues feature structurally
+cannot see.
+
+Both methods fail on Peroxisome. ESM-2 scores 0.041 F1 there, worse than
+composition's 0.096. With 30 test proteins in that class, neither number should
+be read as anything but noise, and it is reported rather than dropped because
+selectively hiding the class where the favoured method loses is how honest
+comparisons quietly stop being honest.
+
+### Checks run before believing any of this
+
+- All four logistic regressions converged (250 iterations at most, against a
+  3,000 cap), so no result is an artifact of a truncated fit.
+- Both splits carry near-identical class proportions, so the difference between
+  them is homology, not balance.
+- The two feature sets share the identical pipeline — same scaler, same
+  regulariser, same `class_weight="balanced"`, same seed.
+- ESM-2's mean pooling uses `last_hidden_state` with a mask that excludes
+  padding and the `<cls>`/`<eos>` tokens. HuggingFace randomly initialises a
+  `pooler` layer for this checkpoint; using `pooler_output` instead would have
+  fed random projections to the classifier and silently corrupted the ESM arm.
+
 ## Roadmap
 
 | Milestone | What happens |
 |---|---|
 | 0 | Toy pipeline end to end — **done** |
 | 1 | Real dataset; families via MMseqs2; leakage measured — **done** |
-| 2 | ESM-2 embeddings, smallest checkpoint, runs on a laptop CPU, cached to disk |
-| 3 | Cheap features vs. embeddings, under both splits, with a per-class breakdown |
-| 4 | Write-up |
+| 2 | ESM-2 embeddings, 35M checkpoint, CPU, cached — **done** |
+| 3 | Cheap features vs. embeddings under both splits — **done** |
+| 4 | Error analysis, learning curve, write-up |
 
 ## Rules this project holds itself to
 
